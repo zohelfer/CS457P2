@@ -11,13 +11,13 @@
 #include <ifaddrs.h>
 #include <arpa/inet.h>
 
-void readChainFile(char* filename)
-{
+using namespace std;
+int main (int argc, char* argv[]){
     string line;
     string output = "";
     int entryCount = 0;
     int lineCount = 0;
-    ifstream ifile (filename);
+    ifstream ifile (argv[1]);
     if (ifile.is_open())
     {
         while (!ifile.eof()){
@@ -44,4 +44,5 @@ void readChainFile(char* filename)
         cout << "Error!: Unable to open input file" << endl;
         exit(1);
     }
+
 }
