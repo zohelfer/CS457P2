@@ -15,6 +15,10 @@
 
 using namespace std;
 
+#define MIN_PORT 1024
+#define MAX_PORT 65535
+#define MAX_LISTEN 5
+
 void printUsage(){
 	printf("Usage:\n'-h': Display this help message.\n'-p': Specifiy port number.\n'-s': Example: ./ss -p 3360");
 }
@@ -25,7 +29,7 @@ void printError(string error){
 }	
 
 void checkValidPort(int portN){
-	if(portN < 1024 || portN > 65535){
+	if(portN < MIN_PORT || portN > MAX_PORT){
 		printError("Not a valid port number");
 	}
 }
@@ -43,9 +47,29 @@ void handleArgs(int argc, char **argv, int *portNum){
 	checkValidPort(*portNum);
 }
 
+int createSocket(int protocolFam, int type, int protocol){
+	int mySocket = socket(protocolFam, type, protocol);
+	if (mySocket < 0) printError("Could not create socket");
+	return mySocket;
+}
+
+struct sockaddr_in createSockAddr(int family, int portNumber, int ipAddr){
+	struct sockaddr_in thisAddr;
+
+	thisAddr.sin_family = family;
+	thisAddr.sin_addr.s_addr = htonl(ipAddr);
+	thisAddr.sin_port = htons(portNumber);
+	
+	return thisAddr;
+}
+
 int main(int argc, char **argv){
-	int portNum = 0;
-	//Port is specified
+	// Defaults
+	int portNum = 0; //random port 0
+	char hostName[128];
+	socklen_t lenSockAddr = sizeof(struct sockaddr_in); //socklen_t is int
+
+	// Port is specified
 	if(argc == 2){
 		char* portString = argv[1];
 		portNum = atoi(portString);
@@ -55,6 +79,25 @@ int main(int argc, char **argv){
 		handleArgs(argc, argv, &portNum);
 	}
 
-	printf("Listening on : %d\n", portNum);
+	// Getting hostname
+	gethostname(hostName, sizeof(hostName));
+
+	// Create sockaddrs
+	struct sockaddr_in servAddr;
+
+	int servSocket = createSocket(PF_INET, SOCK_STREAM, IPPROTO_TCP); // TCP socket
+	servAddr = createSockAddr(AF_INET, portNum, INADDR_ANY);
+
+	if(bind(servSocket, (struct sockaddr*)&servAddr, lenSockAddr) < 0){
+		printError("Could not bind!");
+	}
+
+	if(listen(servSocket, MAX_LISTEN) != 0){
+		printError("Could not listen.");
+	}
+
+	// Necessary for getting random port
+	getsockname(servSocket, (struct sockaddr*) &servAddr, &lenSockAddr);
+	printf("Waiting for a connection on HOST: %s PORT: %hu\n", hostName, ntohs(servAddr.sin_port));
 
 }
