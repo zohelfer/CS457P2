@@ -34,10 +34,6 @@ int checkValidPort(int portN){
 void handleArgs(int argc, char **argv, int *portNum){
 	int option;
 
-	for(int i=0; i < argc; i++){
-		printf("%s\n", argv[i]);
-	}
-
 	while((option = getopt(argc, argv, "sp:")) != -1){
 		switch(option){
 			case 'p': *portNum = atoi(optarg); break;
