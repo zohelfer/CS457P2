@@ -24,11 +24,10 @@ void printError(string error){
 	exit(1);
 }	
 
-int checkValidPort(int portN){
+void checkValidPort(int portN){
 	if(portN < 1024 || portN > 65535){
 		printError("Not a valid port number");
 	}
-	return 1;
 }
 
 void handleArgs(int argc, char **argv, int *portNum){
