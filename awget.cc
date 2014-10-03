@@ -133,7 +133,7 @@ string parseAndRemove (request& requestMessage)
 
     output = requestMessage.IPList.substr(start_pos,end_pos-start_pos);
     requestMessage.IPList.replace(start_pos,end_pos-start_pos+1,"");
-
+    requestMessage.numberOfSS = requestMessage.numberOfSS - 1;
     return output;
 
 }
