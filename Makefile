@@ -8,7 +8,7 @@ awget: 	awget.cc awget.h
 	g++ -Wall -g -I. awget.cc -o awget 
 
 ss:	ss.cc
-	g++ -Wall -g -I. -std=c++11 -pthread ss.cc -o ss
+	g++ -Wall -g -I. -pthread ss.cc -o ss
 
 clean:
 	rm -f awget

@@ -10,9 +10,10 @@
 #include <ifaddrs.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <pthread.h>
 #include <iostream>
 #include <string>
-#include <thread>
+#include <vector>
 
 using namespace std;
 
@@ -64,19 +65,18 @@ struct sockaddr_in createSockAddr(int family, int portNumber, int ipAddr){
 	return thisAddr;
 }
 
-void checkChainGang(string recvM, int messageIn){
+void* checkChainGang(void *passedArg){
 	printf("New Thread ------------------------------------------\n");
-	cout << "Recived: " << recvM << endl;
+	int messageIn = *((int*) passedArg);	
 	while(1){
-		
-		char sendM[200];
-		cin >> sendM;
-
-		int sentM = send(messageIn, &sendM, sizeof(sendM), 0);
-		if (sentM < 0) printError("Could not send message!");	
 		char newRM[200];
 		recv(messageIn, &newRM, sizeof(newRM), 0);
 		cout << "Recived: " << newRM << endl;
+		char sendM[200];
+		cout << "Send: ";
+		cin >> sendM; 
+		int sentM = send(messageIn, &sendM, sizeof(sendM), 0);
+		if (sentM < 0) printError("Could not send message!");	
 	}
 	printf("Exited Thread ------------------------------------------\n");
 }
@@ -145,20 +145,18 @@ int main(int argc, char **argv){
 		printf("Connected!\nConnected to a friend! You send first.\n");
 		
 		while(1){
-			cout << "About to prompt send!" << endl;
+			cout << "Send: " << endl;
 			char sendMe[200];
 			cin >> sendMe;
 			int sendingM = send(clientSocket, &sendMe, sizeof(sendMe), 0);
 			if (sendingM < 0) printError("Could not send message!");
 			
-			cout << "SENT: " << sendMe << endl;
 			char recvM[200];
 			int recivedM = recv(clientSocket, &recvM, sizeof(recvM), 0);
-			cout << "RECIEVED: " << recvM << endl;
+			cout << "Received: " << recvM << endl;
 			if (recivedM < 0) printError("Could not receive message!");
 			if (recivedM == 0) printError("Connection closed. Thank you for using chat.");
 			
-				
 		}
 	}
 
@@ -184,13 +182,28 @@ int main(int argc, char **argv){
 	printf("Waiting for a connection on HOST: %s PORT: %hu\n", hostName, ntohs(servAddr.sin_port));
 
 	//Create a thread array here
+	std::vector<pthread_t> threads(10);
 
-	char recievedM[200];
-
+	//char *recievedM;
+	int threadCount = 0;
+	
 	while(1){
 		int messageIn = accept(servSocket, (struct sockaddr*)&cliAddr, &lenSockAddr);
+
+		int th = pthread_create(&threads.at(threadCount), NULL, checkChainGang, (void*)(int*) &messageIn);
+		if(th){
+			printf("ERROR WITH PTHREAD\n");
+		}
+		printf("Done creating thread");
+		threadCount++;
+		/*
 		if(messageIn < 0) printError("Could not accept.");
-		memset(recievedM, ' ', sizeof(recievedM));
+		printf("Mallocing!\n");
+		recievedM = (char*) malloc(200 * sizeof(char));	
+		printf("Done malloc\n");
+		for(int i=0; i<200; i++){
+			recievedM[i] = '\0';
+		}
 		cout << "About to recieve. "<< endl;
 		int msgRecv = recv(messageIn, &recievedM, sizeof(recievedM), 0);
 		cout << "RECIVED: " << recievedM << endl;
@@ -198,10 +211,16 @@ int main(int argc, char **argv){
 		if(msgRecv < 0) printError("Message not recived!");
 		if(msgRecv == 0) printError("Connection closed. Goodbye.");
 		cout << "going into thread!" << endl;
-		std::thread newThread (checkChainGang, recievedM, messageIn);
-		newThread.join();
-	}
+		*/
+		
+		//threads.push_back(tempThread);
 
+		//std::thread newThread (checkChainGang, recievedM, messageIn);
+		//newThread.join();
+	}
+	for(int i=0; i <= threadCount; i++ ){
+		pthread_join(threads.at(threadCount), NULL);	
+	}
 	// Join all threads here
 	
 }
