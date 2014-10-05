@@ -17,6 +17,7 @@
 
 using namespace std;
 
+int numThreads = 0;
 #define MIN_PORT 1024
 #define MAX_PORT 65535
 #define MAX_LISTEN 5
@@ -68,12 +69,13 @@ struct sockaddr_in createSockAddr(int family, int portNumber, int ipAddr){
 void* checkChainGang(void *passedArg){
 	printf("New Thread ------------------------------------------\n");
 	int messageIn = *((int*) passedArg);	
+	int myTNum = numThreads;
 	while(1){
 		char newRM[200];
 		recv(messageIn, &newRM, sizeof(newRM), 0);
-		cout << "Recived: " << newRM << endl;
+		cout << myTNum <<" Recived: " << newRM << endl;
 		char sendM[200];
-		cout << "Send: ";
+		cout << myTNum << " Send: ";
 		cin >> sendM; 
 		int sentM = send(messageIn, &sendM, sizeof(sendM), 0);
 		if (sentM < 0) printError("Could not send message!");	
@@ -196,6 +198,7 @@ int main(int argc, char **argv){
 		}
 		printf("Done creating thread");
 		threadCount++;
+		numThreads++;
 		/*
 		if(messageIn < 0) printError("Could not accept.");
 		printf("Mallocing!\n");

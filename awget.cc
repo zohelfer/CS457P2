@@ -138,7 +138,7 @@ string parseAndRemove (request& requestMessage)
 
 }
 
-void client(char* ip, char* portNum, request requestMessage)
+void client(const char* ip, const char* portNum, request requestMessage)
 {
 
     int sockID;
@@ -154,9 +154,7 @@ void client(char* ip, char* portNum, request requestMessage)
         if(connect(sockID, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr)) >= 0)
         {
             printf("%s\n","Connected!" );
-
-            sendFileRequest(sockID,requestMessage);
-
+            sendFileRequest(sockID, requestMessage);
             receiveFile(sockID);
         }
         else
@@ -169,7 +167,6 @@ void client(char* ip, char* portNum, request requestMessage)
         cout << "Error: Unable to create socket " << endl;
     }
 }
-
 
 int main (int argc, char* argv[]){
     string URL;
