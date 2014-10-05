@@ -78,6 +78,7 @@ void sendFileRequest(int sockID, request requestMessage)
 
 request readChainFile (const char* filename, string URL)
 {
+    printf("Chainlist is\n");
     struct request requestMessage;
 
     string line;
@@ -96,7 +97,12 @@ request readChainFile (const char* filename, string URL)
                     lineCount++;
                 }
                 else
-                {
+                {   
+                    int i=0;
+                    while(line.at(i) != ' '){
+                        i++;
+                    }      
+                    cout << "< " << line.substr(0, i) << "," << line.substr(i, line.length()) << ">" << endl;
                     output += line;
                     output += ",";
                 }
@@ -138,6 +144,13 @@ string parseAndRemove (request& requestMessage)
 
 }
 
+void printRequest(struct request req){
+    cout << "In Request: " << endl;
+    cout << req.numberOfSS << endl;
+    cout << req.IPList << endl;
+    cout << req.URL << endl;
+
+}
 void client(const char* ip, const char* portNum, request requestMessage)
 {
 
@@ -145,7 +158,6 @@ void client(const char* ip, const char* portNum, request requestMessage)
     struct sockaddr_in dest_addr;
     if ((sockID = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) >= 0)
     {
-
         printf("%s","Connecting to server... ");
         dest_addr.sin_family = AF_INET;
         dest_addr.sin_port = htons(atoi(portNum));
@@ -155,6 +167,7 @@ void client(const char* ip, const char* portNum, request requestMessage)
         {
             printf("%s\n","Connected!" );
             sendFileRequest(sockID, requestMessage);
+            printRequest(requestMessage);
             receiveFile(sockID);
         }
         else
@@ -190,7 +203,7 @@ int main (int argc, char* argv[]){
         exit(1);
     }
 
-
+    printf("Request: %s\n", URL.c_str());
     FILENAME = getFileName(URL);
 
     struct request requestMessage;
@@ -204,7 +217,8 @@ int main (int argc, char* argv[]){
     IP = output.substr(0,output.find(" "));
     PORT = output.substr(output.find(" ")+1,strlen(output.c_str())-(output.find(" ")+1));
 
-
+    cout << "Next SS is < " << IP << ", " << PORT << ">" << endl;
+    cout << "waiting for file..." << endl;
     client(IP.c_str(),PORT.c_str(),requestMessage);
 
 }

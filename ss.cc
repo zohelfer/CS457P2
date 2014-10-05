@@ -22,6 +22,12 @@ int numThreads = 0;
 #define MAX_PORT 65535
 #define MAX_LISTEN 5
 
+struct request{
+    int numberOfSS;
+    string IPList;
+    string URL;
+};
+
 void printUsage(){
 	printf("Usage:\n'-h': Display this help message.\n'-p': Specifiy port number.\n'-s': Example: ./ss -p 3360");
 }
@@ -70,10 +76,18 @@ void* checkChainGang(void *passedArg){
 	printf("New Thread ------------------------------------------\n");
 	int messageIn = *((int*) passedArg);	
 	int myTNum = numThreads;
+	struct request recvReq;
+	//cout << "About to malloc request" << endl;
+	//recvReq = (request*) malloc(sizeof(struct request));
+	//cout << "Malloced request" << endl;
 	while(1){
-		char newRM[200];
-		recv(messageIn, &newRM, sizeof(newRM), 0);
-		cout << myTNum <<" Recived: " << newRM << endl;
+		cout << "In while loop" << endl;
+		recv(messageIn, &recvReq, sizeof(struct request), 0);
+		cout << "Recived request" << endl;
+		cout << recvReq.numberOfSS << endl;
+		string myIPList = recvReq.IPList;
+		cout << "IP List: " << myIPList;
+		
 		char sendM[200];
 		cout << myTNum << " Send: ";
 		cin >> sendM; 
@@ -81,6 +95,7 @@ void* checkChainGang(void *passedArg){
 		if (sentM < 0) printError("Could not send message!");	
 	}
 	printf("Exited Thread ------------------------------------------\n");
+	return passedArg;
 }
 
 void handleArgs(int argc, char** argv, char** ipAddr, int* portNum){
@@ -196,7 +211,7 @@ int main(int argc, char **argv){
 		if(th){
 			printf("ERROR WITH PTHREAD\n");
 		}
-		printf("Done creating thread");
+		printf("Done creating thread\n");
 		threadCount++;
 		numThreads++;
 		/*
