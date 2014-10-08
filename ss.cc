@@ -20,13 +20,20 @@ using namespace std;
 int numThreads = 0;
 #define MIN_PORT 1024
 #define MAX_PORT 65535
-#define MAX_LISTEN 5
+#define MAX_LISTEN 12
 
-struct request{
-    int numberOfSS;
+typedef struct request{
     string IPList;
     string URL;
-};
+    int numberOfSS;
+} request;
+
+void printRequest(struct request req){
+    cout << "In Request: " << endl;
+    cout << req.numberOfSS << endl;
+    cout << req.IPList << endl;
+    cout << req.URL << endl;
+}
 
 void printUsage(){
 	printf("Usage:\n'-h': Display this help message.\n'-p': Specifiy port number.\n'-s': Example: ./ss -p 3360");
@@ -81,17 +88,16 @@ void* checkChainGang(void *passedArg){
 	//recvReq = (request*) malloc(sizeof(struct request));
 	//cout << "Malloced request" << endl;
 	while(1){
-		cout << "In while loop" << endl;
-		recv(messageIn, &recvReq, sizeof(struct request), 0);
-		cout << "Recived request" << endl;
-		cout << recvReq.numberOfSS << endl;
-		string myIPList = recvReq.IPList;
-		cout << "IP List: " << myIPList;
+		//cout << "In while loop" << endl;
+		cout << "MessageIN SOCK: " << messageIn << endl;
+		recv(messageIn, &recvReq, sizeof(recvReq), 0);
+		printRequest(recvReq);
 		
-		char sendM[200];
+		struct request sendReq;
 		cout << myTNum << " Send: ";
-		cin >> sendM; 
-		int sentM = send(messageIn, &sendM, sizeof(sendM), 0);
+		int thisThing = 0;
+		cin >> thisThing;
+		int sentM = send(messageIn, &sendReq, sizeof(sendReq), 0);
 		if (sentM < 0) printError("Could not send message!");	
 	}
 	printf("Exited Thread ------------------------------------------\n");
@@ -205,9 +211,9 @@ int main(int argc, char **argv){
 	int threadCount = 0;
 	
 	while(1){
-		int messageIn = accept(servSocket, (struct sockaddr*)&cliAddr, &lenSockAddr);
-
-		int th = pthread_create(&threads.at(threadCount), NULL, checkChainGang, (void*)(int*) &messageIn);
+		accept(servSocket, (struct sockaddr*)&cliAddr, &lenSockAddr);
+		cout << "servSocket SOCK: " << servSocket << endl;
+		int th = pthread_create(&threads.at(threadCount), NULL, checkChainGang, (void*)(int*) &servSocket);
 		if(th){
 			printf("ERROR WITH PTHREAD\n");
 		}

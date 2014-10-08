@@ -17,11 +17,18 @@ using namespace std;
 
 string FILENAME = "";
 
-struct request{
-    int numberOfSS;
+typedef struct request{
     string IPList;
     string URL;
-};
+    int numberOfSS;
+} request;
+
+void printRequest(struct request req){
+    cout << "In Request: " << endl;
+    cout << req.numberOfSS << endl;
+    cout << req.IPList << endl;
+    cout << req.URL << endl;
+}
 
 string getFileName (string URL)
 {
@@ -73,7 +80,15 @@ void receiveFile(int sockID)
 
 void sendFileRequest(int sockID, request requestMessage)
 {
-    send(sockID, &requestMessage, sizeof(requestMessage), 0);
+    printRequest(requestMessage);
+
+    int sent = send(sockID, &requestMessage, sizeof(requestMessage), 0);
+    if (sent == -1){
+        cout << "Did not send dawg" << endl;
+    }
+    else { 
+        cout << "Sent message" << endl;
+    }
 }
 
 request readChainFile (const char* filename, string URL)
@@ -144,13 +159,6 @@ string parseAndRemove (request& requestMessage)
 
 }
 
-void printRequest(struct request req){
-    cout << "In Request: " << endl;
-    cout << req.numberOfSS << endl;
-    cout << req.IPList << endl;
-    cout << req.URL << endl;
-
-}
 void client(const char* ip, const char* portNum, request requestMessage)
 {
 
@@ -167,7 +175,6 @@ void client(const char* ip, const char* portNum, request requestMessage)
         {
             printf("%s\n","Connected!" );
             sendFileRequest(sockID, requestMessage);
-            printRequest(requestMessage);
             receiveFile(sockID);
         }
         else
