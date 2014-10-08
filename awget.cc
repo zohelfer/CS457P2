@@ -30,6 +30,11 @@ void printRequest(struct request req){
     cout << req.URL << endl;
 }
 
+/*
+Summary:
+    Method goes to the last "/" of a url to create a substring of the filename.
+    If there is no "/" the default filename is index.html
+ */
 string getFileName (string URL)
 {
     string filename = "";
@@ -46,6 +51,11 @@ string getFileName (string URL)
     return filename;
 }
 
+/*
+Summary:
+    Method opens a file with specified filename. The files is appended with each 1024 sized packet.
+    Once the file is finished transferring the file is closed.
+ */
 void receiveFile(int sockID)
 {
     FILE *recvFile = fopen(FILENAME.c_str(), "a");
@@ -78,6 +88,11 @@ void receiveFile(int sockID)
     fclose(recvFile);
 }
 
+/*
+Summary:
+    Method sends a message to first SS with the size of the next message.
+    The second message contains the list of IPs that the SS can chose from.
+ */
 void sendFileRequest(int sockID, request requestMessage)
 {
     printRequest(requestMessage);
@@ -89,8 +104,32 @@ void sendFileRequest(int sockID, request requestMessage)
     else { 
         cout << "Sent message" << endl;
     }
+    struct sendSize
+    {
+        int messageSize;
+    };
+
+    string messageString = requestMessage.IPList;
+    struct sendSize messageSendSize;
+    messageSendSize.messageSize = strlen(messageString.c_str());
+    if (send(sockID,&messageSendSize,sizeof(messageSendSize), 0) > 0)
+    {
+        if (send(sockID,messageString.c_str(),strlen(messageString.c_str()), 0) < 0)
+        {
+            cout << "Error!: Unable to send message text!" << endl;
+        }
+    }
+    else
+    {
+        cout << "Error: Unable to send message size!" << endl;
+    }
 }
 
+/*
+Summary:
+    Method reads the chainfile and parses the data.
+    Data is stored in a request struct.
+ */
 request readChainFile (const char* filename, string URL)
 {
     printf("Chainlist is\n");
@@ -138,6 +177,11 @@ request readChainFile (const char* filename, string URL)
     return requestMessage;
 }
 
+/*
+Summary:
+    Method picks a random IP and Port from the list and returns them.
+    The IP and Port are then removed.
+ */
 string parseAndRemove (request& requestMessage)
 {
     string output = "";
@@ -159,6 +203,12 @@ string parseAndRemove (request& requestMessage)
 
 }
 
+
+
+/*
+Summary:
+    Method sets up a connection with a SS.
+ */
 void client(const char* ip, const char* portNum, request requestMessage)
 {
 
@@ -174,6 +224,7 @@ void client(const char* ip, const char* portNum, request requestMessage)
         if(connect(sockID, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr)) >= 0)
         {
             printf("%s\n","Connected!" );
+
             sendFileRequest(sockID, requestMessage);
             receiveFile(sockID);
         }
