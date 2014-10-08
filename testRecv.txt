@@ -1,0 +1,27 @@
+            while (true)
+            {
+                struct sendSize
+                {
+                  int mesSize;
+                };
+                int recvMesSize = 0;
+
+                struct sendSize recvMessageSize;
+                recvMesSize  = recv(friendID,&recvMessageSize,sizeof(recvMessageSize), 0);
+                if (recvMesSize  > 0)
+                {
+                  char temp_buff[recvMessageSize.mesSize];
+                  memset(temp_buff,'\0',strlen(temp_buff));
+                  int recvSize = 0;
+
+                  recvSize = recv(friendID, &temp_buff, sizeof(temp_buff), 0);
+                  if (recvSize > 0)
+                  {
+                  temp_buff[recvMessageSize.mesSize] = '\0';
+                  string output(temp);
+                  cout << output << endl;
+                  break;
+                  }
+                }
+
+            }
