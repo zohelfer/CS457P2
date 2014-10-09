@@ -1,9 +1,7 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <iostream>
+#include <vector>
 #include <fstream>
 #include <iterator>
-#include <string.h>
 #include <sstream>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -12,23 +10,9 @@
 #include <arpa/inet.h>
 #include <cstring>
 #include <time.h>
-
-using namespace std;
+#include "awget.h"
 
 string FILENAME = "";
-
-typedef struct request{
-    string IPList;
-    string URL;
-    int numberOfSS;
-} request;
-
-void printRequest(struct request req){
-    cout << "In Request: " << endl;
-    cout << req.numberOfSS << endl;
-    cout << req.IPList << endl;
-    cout << req.URL << endl;
-}
 
 /*
 Summary:
@@ -47,7 +31,7 @@ string getFileName (string URL)
     {
         filename = "index.html";
     }
-    cout << filename << endl;
+    //cout << filename << endl;
     return filename;
 }
 
@@ -93,7 +77,7 @@ Summary:
     Method sends a message to first SS with the size of the next message.
     The second message contains the list of IPs that the SS can chose from.
  */
-void sendFileRequest(int sockID, request requestMessage)
+void sendFile(int sockID, REQUEST requestMessage)
 {
     printRequest(requestMessage);
 
@@ -109,7 +93,8 @@ void sendFileRequest(int sockID, request requestMessage)
         int messageSize;
     };
 
-    string messageString = requestMessage.IPList;
+    string messageString = requestMessage.URLandIP;
+
     struct sendSize messageSendSize;
     messageSendSize.messageSize = strlen(messageString.c_str());
     if (send(sockID,&messageSendSize,sizeof(messageSendSize), 0) > 0)
@@ -128,17 +113,19 @@ void sendFileRequest(int sockID, request requestMessage)
 /*
 Summary:
     Method reads the chainfile and parses the data.
-    Data is stored in a request struct.
+    Data is stored in a REQUEST struct.
  */
-request readChainFile (const char* filename, string URL)
+vector<string> readChainFile (const char* filename, string URL)
 {
-    printf("Chainlist is\n");
-    struct request requestMessage;
+    printf("chainlist is\n");
+    
+    string line = "";
+   
+    vector<string> collectionFile;
+    collectionFile.push_back(URL);
 
-    string line;
-    string output = "";
-    int entryCount = 0;
     int lineCount = 0;
+
     ifstream ifile (filename);
     if (ifile.is_open())
     {
@@ -147,7 +134,7 @@ request readChainFile (const char* filename, string URL)
             {
                 if(lineCount == 0)
                 {
-                    entryCount = atoi(line.c_str());
+                    collectionFile.push_back(line);
                     lineCount++;
                 }
                 else
@@ -155,10 +142,13 @@ request readChainFile (const char* filename, string URL)
                     int i=0;
                     while(line.at(i) != ' '){
                         i++;
-                    }      
-                    cout << "< " << line.substr(0, i) << "," << line.substr(i, line.length()) << ">" << endl;
-                    output += line;
-                    output += ",";
+                    }
+                    string myIP = line.substr(0, i);
+                    string myPort = line.substr(i, line.length());
+                    cout << "<" << myIP << "," << myPort << ">" << endl;
+
+                    string temp = myIP + "," + myPort + ";";
+                    collectionFile.push_back(temp);
                 }
             }
             ifile.close();
@@ -170,46 +160,14 @@ request readChainFile (const char* filename, string URL)
         exit(1);
     }
 
-    requestMessage.numberOfSS = entryCount;
-    requestMessage.IPList = output;
-    requestMessage.URL = URL;
-
-    return requestMessage;
+    return collectionFile;
 }
-
-/*
-Summary:
-    Method picks a random IP and Port from the list and returns them.
-    The IP and Port are then removed.
- */
-string parseAndRemove (request& requestMessage)
-{
-    string output = "";
-    srand(time(NULL));
-    int choice = rand() % requestMessage.numberOfSS;
-    int start_pos = 0;
-    int end_pos = requestMessage.IPList.find(",");
-
-    for (int i = 0; i < choice; i++)
-    {
-        start_pos = end_pos+1;
-        end_pos = requestMessage.IPList.find(",",end_pos+1);
-    }
-
-    output = requestMessage.IPList.substr(start_pos,end_pos-start_pos);
-    requestMessage.IPList.replace(start_pos,end_pos-start_pos+1,"");
-    requestMessage.numberOfSS = requestMessage.numberOfSS - 1;
-    return output;
-
-}
-
-
 
 /*
 Summary:
     Method sets up a connection with a SS.
  */
-void client(const char* ip, const char* portNum, request requestMessage)
+void client(const char* ip, const char* portNum, REQUEST requestMessage)
 {
 
     int sockID;
@@ -224,8 +182,7 @@ void client(const char* ip, const char* portNum, request requestMessage)
         if(connect(sockID, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr)) >= 0)
         {
             printf("%s\n","Connected!" );
-
-            sendFileRequest(sockID, requestMessage);
+            sendFile(sockID, requestMessage);
             receiveFile(sockID);
         }
         else
@@ -237,6 +194,25 @@ void client(const char* ip, const char* portNum, request requestMessage)
     {
         cout << "Error: Unable to create socket " << endl;
     }
+}
+
+vector<string> getIPandPort(string ipAndPort){
+    int i=0;
+    while(ipAndPort.at(i) != ',') i++;
+
+    int end = i;
+    int portLen = 0;
+    while(ipAndPort.at(end) != ';'){
+        end++;
+        portLen++;
+    } 
+
+    vector<string> ipPort;
+
+    ipPort.push_back(ipAndPort.substr(0,i));
+    ipPort.push_back(ipAndPort.substr(i+1, portLen-1)); // Gets rid of ',' and ';'
+
+    return ipPort;
 }
 
 int main (int argc, char* argv[]){
@@ -264,19 +240,34 @@ int main (int argc, char* argv[]){
     printf("Request: %s\n", URL.c_str());
     FILENAME = getFileName(URL);
 
-    struct request requestMessage;
-    string output = "";
-    requestMessage = readChainFile(chainFile.c_str(),URL);
+    vector<string> fileInVec;
+    fileInVec = readChainFile(chainFile.c_str(),URL);
 
-    output = parseAndRemove(requestMessage);
-    string IP = "";
-    string PORT = "";
+    // Random index
+    srand(time(NULL));
+    int randIndex = (2 + rand() % (fileInVec.size() - 3)); // 2 <= Index <= Length
 
-    IP = output.substr(0,output.find(" "));
-    PORT = output.substr(output.find(" ")+1,strlen(output.c_str())-(output.find(" ")+1));
+    string randRemoved = fileInVec.at(randIndex);
+    fileInVec.erase(fileInVec.begin() + randIndex); // remove random IP
 
-    cout << "Next SS is < " << IP << ", " << PORT << ">" << endl;
+    // Getting IP and PORT to send to
+    vector<string> ipAndPort;
+    ipAndPort = getIPandPort(randRemoved);
+    string IP = ipAndPort.at(0);
+    string PORT = ipAndPort.at(1);
+
+    cout << "next SS is <" + IP + "," + PORT + ">" <<  endl;
     cout << "waiting for file..." << endl;
-    client(IP.c_str(),PORT.c_str(),requestMessage);
 
+    // IMPLEMENT CLIENT HERE
+    string toSend;
+    toSend = fileInVec.at(0) + "!" + fileInVec.at(1) + "!";
+    
+    for(unsigned int i=2; i < fileInVec.size(); i++) toSend += fileInVec.at(i);
+
+    cout << "SEND: " << toSend;
+
+    struct REQUEST requestMessage;
+    requestMessage.URLandIP = toSend;
+    client(IP.c_str(),PORT.c_str(),requestMessage);
 }
