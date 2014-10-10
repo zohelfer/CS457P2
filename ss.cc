@@ -1,250 +1,311 @@
+/*
+    C socket server example, handles multiple clients using threads
+    Compile
+    gcc server.c -lpthread -o server
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <fstream>
+#include <iostream>
+#include <iterator>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
 #include <netinet/in.h>
-#include <ctype.h>
-#include <getopt.h>
 #include <ifaddrs.h>
-#include <unistd.h>
-#include <netdb.h>
+#include <arpa/inet.h>
 #include <pthread.h>
-#include <iostream>
-#include <string>
-#include <vector>
+#include <time.h>
 
 using namespace std;
+//the thread function
+void *connection_handler(void *);
 
-int numThreads = 0;
-#define MIN_PORT 1024
-#define MAX_PORT 65535
-#define MAX_LISTEN 12
+char* getIP()
+{
+    struct ifaddrs *ifaTemp, *ifa;
+    struct sockaddr_in *temp;
+    char *addr;
 
-typedef struct request{
-    string IPList;
-    string URL;
-    int numberOfSS;
-} request;
+    getifaddrs (&ifaTemp);
+    for (ifa = ifaTemp; ifa; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr->sa_family==AF_INET && strcmp(ifa->ifa_name, "lo") != 0) {
+            temp = (struct sockaddr_in *) ifa->ifa_addr;
+            addr = inet_ntoa(temp->sin_addr);
+            break;
+        }
+    }
 
-void printRequest(struct request req){
-    cout << "In Request: " << endl;
-    cout << req.numberOfSS << endl;
-    cout << req.IPList << endl;
-    cout << req.URL << endl;
+    freeifaddrs(ifaTemp);
+
+    return addr;
 }
 
-void printUsage(){
-	printf("Usage:\n'-h': Display this help message.\n'-p': Specifiy port number.\n'-s': Example: ./ss -p 3360");
+int main(int argc , char *argv[])
+{
+    int socket_desc , client_sock , c;
+    struct sockaddr_in server , client;
+
+    //Create socket
+    socket_desc = socket(AF_INET , SOCK_STREAM , 0);
+    if (socket_desc == -1)
+    {
+        printf("Could not create socket");
+    }
+    puts("Socket created");
+
+    //Prepare the sockaddr_in structure
+    server.sin_family = AF_INET;
+    char* ip = getIP();
+    server.sin_addr.s_addr = inet_addr(ip);
+    server.sin_port = 0;
+
+    //Bind
+    if( bind(socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0)
+    {
+        //print the error message
+        perror("bind failed. Error");
+        return 1;
+    }
+    puts("bind done");
+
+    //Listen
+    listen(socket_desc , 3);
+
+    //Accept and incoming connection
+    struct sockaddr_in sin;
+    socklen_t len = sizeof(sin);
+    getsockname(socket_desc, (struct sockaddr *)&sin, &len);
+    printf("%s %s %s %d\n","Waiting for connection on",ip,"port", ntohs(sin.sin_port) );
+    c = sizeof(struct sockaddr_in);
+
+
+    //Accept and incoming connection
+    c = sizeof(struct sockaddr_in);
+    pthread_t thread_id;
+
+
+    while( (client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c)) )
+    {
+        puts("Connection accepted");
+
+        if( pthread_create( &thread_id , NULL ,  connection_handler , (void*) &client_sock) < 0)
+        {
+            perror("could not create thread");
+            return 1;
+        }
+
+        //Now join the thread , so that we dont terminate before the thread
+        //pthread_join( thread_id , NULL);
+        puts("Handler assigned");
+    }
+
+    if (client_sock < 0)
+    {
+        perror("accept failed");
+        return 1;
+    }
+
+    return 0;
 }
 
-void printError(string error){
-	cerr << "Error: " << error << endl;
-	exit(1);
-}	
+string handShake (int friendID)
+{
+    struct sendSize
+    {
+        int mesSize;
+    };
+    string output;
+    // while(true)
+    // {
+    int recvMesSize = 0;
 
-void checkValidPort(int portN){
-	if(portN < MIN_PORT || portN > MAX_PORT){
-		printError("Not a valid port number");
-	}
+    struct sendSize recvMessageSize;
+    recvMesSize  = recv(friendID,&recvMessageSize,sizeof(recvMessageSize), 0);
+    if (recvMesSize  > 0)
+    {
+        char temp_buff[recvMessageSize.mesSize];
+        memset(temp_buff,'\0',strlen(temp_buff));
+        int recvSize = 0;
+
+        recvSize = recv(friendID, &temp_buff, sizeof(temp_buff), 0);
+        if (recvSize > 0)
+        {
+            temp_buff[recvMessageSize.mesSize] = '\0';
+            string tempSTR(temp_buff);
+            output = tempSTR;
+            //   break;
+        }
+    }
+// }
+    return output;
 }
 
-void handleArgs(int argc, char **argv, int *portNum){
-	int option;
+string parseAndRemove (int numberOfSS, string IPList, string& out)
+{
+    string output = "";
+    srand(time(NULL));
+    int choice = rand() % numberOfSS;
+    int start_pos = 0;
+    int end_pos = IPList.find(",");
 
-	while((option = getopt(argc, argv, "sp:")) != -1){
-		switch(option){
-			case 'p': *portNum = atoi(optarg); break;
-			default: printUsage(); exit(1);
-		}
-	}
-	
-	checkValidPort(*portNum);
-}
+    for (int i = 0; i < choice; i++)
+    {
+        start_pos = end_pos+1;
+        end_pos = IPList.find(",",end_pos+1);
+    }
+    out = IPList.substr(start_pos,end_pos-start_pos);
+    IPList.replace(start_pos,end_pos-start_pos+1,"");
 
-int createSocket(int protocolFam, int type, int protocol){
-	int mySocket = socket(protocolFam, type, protocol);
-	if (mySocket < 0) printError("Could not create socket");
-	return mySocket;
-}
-
-struct sockaddr_in createSockAddr(int family, int portNumber, int ipAddr){
-	struct sockaddr_in thisAddr;
-
-	thisAddr.sin_family = family;
-	thisAddr.sin_addr.s_addr = htonl(ipAddr);
-	thisAddr.sin_port = htons(portNumber);
-	
-	return thisAddr;
-}
-
-void* checkChainGang(void *passedArg){
-	printf("New Thread ------------------------------------------\n");
-	int messageIn = *((int*) passedArg);	
-	int myTNum = numThreads;
-	struct request recvReq;
-	//cout << "About to malloc request" << endl;
-	//recvReq = (request*) malloc(sizeof(struct request));
-	//cout << "Malloced request" << endl;
-	while(1){
-		//cout << "In while loop" << endl;
-		cout << "MessageIN SOCK: " << messageIn << endl;
-		recv(messageIn, &recvReq, sizeof(recvReq), 0);
-		printRequest(recvReq);
-		
-		struct request sendReq;
-		cout << myTNum << " Send: ";
-		int thisThing = 0;
-		cin >> thisThing;
-		int sentM = send(messageIn, &sendReq, sizeof(sendReq), 0);
-		if (sentM < 0) printError("Could not send message!");	
-	}
-	printf("Exited Thread ------------------------------------------\n");
-	return passedArg;
-}
-
-void handleArgs(int argc, char** argv, char** ipAddr, int* portNum){
-	int option;
-	while((option = getopt(argc, argv, "p:s:")) != -1){
-		switch(option){
-			case 's': *ipAddr = optarg; break;
-			case 'p': *portNum = atoi(optarg); break;
-			default: printUsage(); exit(1);
-		}
-	}
-
-	struct sockaddr_in fakeAddr;
-	if(!inet_aton(*ipAddr, &fakeAddr.sin_addr)){
-		printError("Not a valid IP");
-	}
-
-	if( *portNum < 1024 || *portNum > 65535){
-		printError("Not a valid port number");
-	}
+    return IPList;
 
 }
 
-int main(int argc, char **argv){
-	// Defaults
-	int portNum = 0; //random port 0
-	char hostName[128];
-	socklen_t lenSockAddr = sizeof(struct sockaddr_in); //socklen_t is int
-
-	// Port is specified
-	if(argc == 2){
-		char* portString = argv[1];
-		portNum = atoi(portString);
-		checkValidPort(portNum);
-	}
-	if(argc == 3){
-		handleArgs(argc, argv, &portNum);
-	}
-	if(argc > 3){
-		//Client --- this code can go in wget
-		char* ipAddr = NULL;
-		int portNum = 0;
-
-		handleArgs(argc, argv, &ipAddr, &portNum);
-
-		if(ipAddr == NULL || portNum == 0){ printf("Arguments not specified correctly.\n"); printUsage(); exit(1); }
-	
-		//printf("You have selected \nIP:%s \nPort:%d\n", ipAddr, portNum);
-		printf("Connecting to server...\n");
-
-		int clientSocket;
-		struct sockaddr_in clientAddr;
-
-		//clientAddr = createSockAddr(AF_INET, portNum, inet_addr(ipAddr));
-		clientAddr.sin_family = AF_INET;
-		clientAddr.sin_port = htons(portNum);
-		clientAddr.sin_addr.s_addr = inet_addr(ipAddr);
-
-		clientSocket = createSocket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-		if(connect(clientSocket, (struct sockaddr *) &clientAddr, sizeof(clientAddr)) < 0){
-			perror("Error: Could not connect to Server."); exit(1);
-		}
-		printf("Connected!\nConnected to a friend! You send first.\n");
-		
-		while(1){
-			cout << "Send: " << endl;
-			char sendMe[200];
-			cin >> sendMe;
-			int sendingM = send(clientSocket, &sendMe, sizeof(sendMe), 0);
-			if (sendingM < 0) printError("Could not send message!");
-			
-			char recvM[200];
-			int recivedM = recv(clientSocket, &recvM, sizeof(recvM), 0);
-			cout << "Received: " << recvM << endl;
-			if (recivedM < 0) printError("Could not receive message!");
-			if (recivedM == 0) printError("Connection closed. Thank you for using chat.");
-			
-		}
-	}
-
-	// Getting hostname
-	gethostname(hostName, sizeof(hostName));
-
-	// Create sockaddrs
-	struct sockaddr_in servAddr, cliAddr;
-
-	int servSocket = createSocket(PF_INET, SOCK_STREAM, IPPROTO_TCP); // TCP socket
-	servAddr = createSockAddr(AF_INET, portNum, INADDR_ANY);
-
-	if(bind(servSocket, (struct sockaddr*)&servAddr, lenSockAddr) < 0){
-		printError("Could not bind!");
-	}
-
-	if(listen(servSocket, MAX_LISTEN) != 0){
-		printError("Could not listen.");
-	}
-
-	// Necessary for getting random port
-	getsockname(servSocket, (struct sockaddr*) &servAddr, &lenSockAddr);
-	printf("Waiting for a connection on HOST: %s PORT: %hu\n", hostName, ntohs(servAddr.sin_port));
-
-	//Create a thread array here
-	std::vector<pthread_t> threads(10);
-
-	//char *recievedM;
-	int threadCount = 0;
-	
-	while(1){
-		accept(servSocket, (struct sockaddr*)&cliAddr, &lenSockAddr);
-		cout << "servSocket SOCK: " << servSocket << endl;
-		int th = pthread_create(&threads.at(threadCount), NULL, checkChainGang, (void*)(int*) &servSocket);
-		if(th){
-			printf("ERROR WITH PTHREAD\n");
-		}
-		printf("Done creating thread\n");
-		threadCount++;
-		numThreads++;
-		/*
-		if(messageIn < 0) printError("Could not accept.");
-		printf("Mallocing!\n");
-		recievedM = (char*) malloc(200 * sizeof(char));	
-		printf("Done malloc\n");
-		for(int i=0; i<200; i++){
-			recievedM[i] = '\0';
-		}
-		cout << "About to recieve. "<< endl;
-		int msgRecv = recv(messageIn, &recievedM, sizeof(recievedM), 0);
-		cout << "RECIVED: " << recievedM << endl;
-
-		if(msgRecv < 0) printError("Message not recived!");
-		if(msgRecv == 0) printError("Connection closed. Goodbye.");
-		cout << "going into thread!" << endl;
-		*/
-		
-		//threads.push_back(tempThread);
-
-		//std::thread newThread (checkChainGang, recievedM, messageIn);
-		//newThread.join();
-	}
-	for(int i=0; i <= threadCount; i++ ){
-		pthread_join(threads.at(threadCount), NULL);	
-	}
-	// Join all threads here
-	
+string getFileName (string URL)
+{
+    string filename = "";
+    if(URL.find("/") > (strlen(URL.c_str()) +1))
+    {
+        return "index.html";
+    }
+    filename = strrchr(URL.c_str(), '/') + 1;
+    if (filename.compare("") == 0)
+    {
+        filename = "index.html";
+    }
+    cout << filename << endl;
+    return filename;
 }
+
+void sendFile (int friendID, string website)
+{
+    string systemCall ="";
+    systemCall += "wget ";
+    systemCall += website;
+    systemCall += " -q";
+    system(systemCall.c_str());
+
+    string fileName = getFileName(website);
+
+
+    FILE *sendFile;
+    sendFile = fopen (fileName.c_str() , "r");
+    int segSize;
+    char sendBuffer[1024];
+
+    while((segSize = fread(sendBuffer, sizeof(char), 1024, sendFile)) > 0)
+    {
+        if(send(friendID, sendBuffer, segSize, 0) < 0)
+        {
+            //   fprintf(stderr, "ERROR: Failed to send file %s. (errno = %d)\n", "FILE", errno);
+            break;
+        }
+        bzero(sendBuffer, 1024);
+    }
+    printf("Ok File %s from Client was Sent!\n", "FILE");
+    fclose (sendFile);
+    remove(fileName.c_str());
+}
+
+/*
+ * This will handle connection for each client
+ * */
+void *connection_handler(void *socket_desc)
+{
+    int sock = *(int*)socket_desc;
+
+    string infoString = handShake(sock);
+    int numberSS = atoi(infoString.substr(0,infoString.find(';')).c_str());
+
+    if (numberSS > 0)
+    {
+        int pos = infoString.find(';');
+        string nextIP = "";
+        string parseStr = infoString.substr(pos+1, infoString.find(';',pos+1)-2);
+        string newIPList = parseAndRemove(numberSS,parseStr,nextIP);
+
+        string URL = infoString.substr(infoString.find(';',pos+1)+1, strlen(infoString.c_str()));
+
+        numberSS--;
+
+        string messageString = "";
+        char intbuffer[2];
+        sprintf(intbuffer,"%d",numberSS);
+        string ConvertInt(intbuffer);
+        messageString += ConvertInt;
+        messageString += ";";
+        messageString += newIPList;
+        messageString += ";";
+        messageString += URL;
+
+        cout << messageString << endl;
+
+        string ip = nextIP.substr(0,nextIP.find(' '));
+        string portNum = nextIP.substr(nextIP.find(' ')+1,strlen(nextIP.c_str()));
+        int sockID;
+        struct sockaddr_in dest_addr;
+
+        if ((sockID = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) >= 0)
+        {
+
+            printf("%s","Connecting to next SS... ");
+            dest_addr.sin_family = AF_INET;
+            dest_addr.sin_port = htons(atoi(portNum.c_str()));
+            dest_addr.sin_addr.s_addr =  inet_addr(ip.c_str());
+
+            if(connect(sockID, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr)) >= 0)
+            {
+                printf("%s\n","Connected!" );
+
+                struct sendSize
+                {
+                    int mesSize;
+                };
+                struct sendSize messageSendSize;
+                messageSendSize.mesSize = strlen(messageString.c_str());
+                if (send(sockID,&messageSendSize,sizeof(messageSendSize), 0) > 0)
+                {
+                    if (send(sockID,messageString.c_str(),strlen(messageString.c_str()), 0) < 0)
+                    {
+                        cout << "Error!: Unable to send message text!" << endl;
+                    }
+                }
+                else
+                {
+                    cout << "Error: Unable to send message size!" << endl;
+                }
+
+                char receivedBuffer [1024];
+                int recvSize;
+                while((recvSize = recv(sockID, receivedBuffer, 1024,0)) > 0)
+                {
+                    if (send(sock, receivedBuffer,1024,0) > 0)
+                    {
+                        bzero(receivedBuffer, 1024);
+                    }
+                }
+
+            }
+
+            else
+            {
+                cout << "Error: Unable to connect" << endl;
+            }
+        }
+        else
+        {
+            cout << "Error: Unable to create socket " << endl;
+        }
+    }
+
+    else
+    {
+        int pos = infoString.find(';');
+        string URL = infoString.substr(infoString.find(';',pos+1)+1, strlen(infoString.c_str()));
+        cout << "REQUEST " << URL << endl;
+        sendFile(sock,URL);
+    }
+
+    return 0;
+} 

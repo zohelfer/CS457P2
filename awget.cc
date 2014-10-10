@@ -1,7 +1,9 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include <iostream>
-#include <vector>
 #include <fstream>
 #include <iterator>
+#include <string.h>
 #include <sstream>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -10,15 +12,18 @@
 #include <arpa/inet.h>
 #include <cstring>
 #include <time.h>
-#include "awget.h"
+#include <unistd.h>
+
+using namespace std;
 
 string FILENAME = "";
 
-/*
-Summary:
-    Method goes to the last "/" of a url to create a substring of the filename.
-    If there is no "/" the default filename is index.html
- */
+struct request{
+    int numberOfSS;
+    string IPList;
+    string URL;
+};
+
 string getFileName (string URL)
 {
     string filename = "";
@@ -31,15 +36,10 @@ string getFileName (string URL)
     {
         filename = "index.html";
     }
-    //cout << filename << endl;
+    cout << filename << endl;
     return filename;
 }
 
-/*
-Summary:
-    Method opens a file with specified filename. The files is appended with each 1024 sized packet.
-    Once the file is finished transferring the file is closed.
- */
 void receiveFile(int sockID)
 {
     FILE *recvFile = fopen(FILENAME.c_str(), "a");
@@ -49,7 +49,7 @@ void receiveFile(int sockID)
 
     bzero(receivedBuffer, 1024);
     int recvSize = 0;
-    while((recvSize = recv(sockID, receivedBuffer, 1024, 0)) > 0)
+    while((recvSize = recv(sockID, receivedBuffer, 1024,0)) > 0)
     {
         int saveSize = fwrite(receivedBuffer, sizeof(char), recvSize, recvFile);
         if(saveSize < recvSize)
@@ -72,31 +72,24 @@ void receiveFile(int sockID)
     fclose(recvFile);
 }
 
-/*
-Summary:
-    Method sends a message to first SS with the size of the next message.
-    The second message contains the list of IPs that the SS can chose from.
- */
-void sendFile(int sockID, REQUEST requestMessage)
+void sendFileRequest(int sockID, request requestMessage)
 {
-    printRequest(requestMessage);
-
-    int sent = send(sockID, &requestMessage, sizeof(requestMessage), 0);
-    if (sent == -1){
-        cout << "Did not send dawg" << endl;
-    }
-    else { 
-        cout << "Sent message" << endl;
-    }
     struct sendSize
     {
-        int messageSize;
+        int mesSize;
     };
 
-    string messageString = requestMessage.URLandIP;
-
+    string messageString = "";
+    char intbuffer[2];
+    sprintf(intbuffer,"%d",requestMessage.numberOfSS);
+    string ConvertInt(intbuffer);
+    messageString += ConvertInt;
+    messageString += ";";
+    messageString += requestMessage.IPList;
+    messageString += ";";
+    messageString += requestMessage.URL;
     struct sendSize messageSendSize;
-    messageSendSize.messageSize = strlen(messageString.c_str());
+    messageSendSize.mesSize = strlen(messageString.c_str());
     if (send(sockID,&messageSendSize,sizeof(messageSendSize), 0) > 0)
     {
         if (send(sockID,messageString.c_str(),strlen(messageString.c_str()), 0) < 0)
@@ -110,22 +103,14 @@ void sendFile(int sockID, REQUEST requestMessage)
     }
 }
 
-/*
-Summary:
-    Method reads the chainfile and parses the data.
-    Data is stored in a REQUEST struct.
- */
-vector<string> readChainFile (const char* filename, string URL)
+request readChainFile (const char* filename, string URL)
 {
-    printf("chainlist is\n");
-    
-    string line = "";
-   
-    vector<string> collectionFile;
-    collectionFile.push_back(URL);
+    struct request requestMessage;
 
+    string line;
+    string output = "";
+    int entryCount = 0;
     int lineCount = 0;
-
     ifstream ifile (filename);
     if (ifile.is_open())
     {
@@ -134,21 +119,13 @@ vector<string> readChainFile (const char* filename, string URL)
             {
                 if(lineCount == 0)
                 {
-                    collectionFile.push_back(line);
+                    entryCount = atoi(line.c_str());
                     lineCount++;
                 }
                 else
-                {   
-                    int i=0;
-                    while(line.at(i) != ' '){
-                        i++;
-                    }
-                    string myIP = line.substr(0, i);
-                    string myPort = line.substr(i, line.length());
-                    cout << "<" << myIP << "," << myPort << ">" << endl;
-
-                    string temp = myIP + "," + myPort + ";";
-                    collectionFile.push_back(temp);
+                {
+                    output += line;
+                    output += ",";
                 }
             }
             ifile.close();
@@ -160,20 +137,42 @@ vector<string> readChainFile (const char* filename, string URL)
         exit(1);
     }
 
-    return collectionFile;
+    requestMessage.numberOfSS = entryCount;
+    requestMessage.IPList = output;
+    requestMessage.URL = URL;
+
+    return requestMessage;
 }
 
-/*
-Summary:
-    Method sets up a connection with a SS.
- */
-void client(const char* ip, const char* portNum, REQUEST requestMessage)
+string parseAndRemove (request& requestMessage)
+{
+    string output = "";
+    srand(time(NULL));
+    int choice = rand() % requestMessage.numberOfSS;
+    int start_pos = 0;
+    int end_pos = requestMessage.IPList.find(",");
+
+    for (int i = 0; i < choice; i++)
+    {
+        start_pos = end_pos+1;
+        end_pos = requestMessage.IPList.find(",",end_pos+1);
+    }
+
+    output = requestMessage.IPList.substr(start_pos,end_pos-start_pos);
+    requestMessage.IPList.replace(start_pos,end_pos-start_pos+1,"");
+    requestMessage.numberOfSS = requestMessage.numberOfSS - 1;
+    return output;
+
+}
+
+void client(const char* ip, const char* portNum, request requestMessage)
 {
 
     int sockID;
     struct sockaddr_in dest_addr;
     if ((sockID = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) >= 0)
     {
+
         printf("%s","Connecting to server... ");
         dest_addr.sin_family = AF_INET;
         dest_addr.sin_port = htons(atoi(portNum));
@@ -182,7 +181,9 @@ void client(const char* ip, const char* portNum, REQUEST requestMessage)
         if(connect(sockID, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr)) >= 0)
         {
             printf("%s\n","Connected!" );
-            sendFile(sockID, requestMessage);
+
+            sendFileRequest(sockID,requestMessage);
+
             receiveFile(sockID);
         }
         else
@@ -196,24 +197,6 @@ void client(const char* ip, const char* portNum, REQUEST requestMessage)
     }
 }
 
-vector<string> getIPandPort(string ipAndPort){
-    int i=0;
-    while(ipAndPort.at(i) != ',') i++;
-
-    int end = i;
-    int portLen = 0;
-    while(ipAndPort.at(end) != ';'){
-        end++;
-        portLen++;
-    } 
-
-    vector<string> ipPort;
-
-    ipPort.push_back(ipAndPort.substr(0,i));
-    ipPort.push_back(ipAndPort.substr(i+1, portLen-1)); // Gets rid of ',' and ';'
-
-    return ipPort;
-}
 
 int main (int argc, char* argv[]){
     string URL;
@@ -237,37 +220,24 @@ int main (int argc, char* argv[]){
         exit(1);
     }
 
-    printf("Request: %s\n", URL.c_str());
+
     FILENAME = getFileName(URL);
 
-    vector<string> fileInVec;
-    fileInVec = readChainFile(chainFile.c_str(),URL);
+    struct request requestMessage;
+    string output = "";
+    requestMessage = readChainFile(chainFile.c_str(),URL);
 
-    // Random index
-    srand(time(NULL));
-    int randIndex = (2 + rand() % (fileInVec.size() - 3)); // 2 <= Index <= Length
+    output = parseAndRemove(requestMessage);
+    string IP = "";
+    string PORT = "";
 
-    string randRemoved = fileInVec.at(randIndex);
-    fileInVec.erase(fileInVec.begin() + randIndex); // remove random IP
+    IP = output.substr(0,output.find(" "));
+    PORT = output.substr(output.find(" ")+1,strlen(output.c_str())-(output.find(" ")+1));
 
-    // Getting IP and PORT to send to
-    vector<string> ipAndPort;
-    ipAndPort = getIPandPort(randRemoved);
-    string IP = ipAndPort.at(0);
-    string PORT = ipAndPort.at(1);
+    cout << requestMessage.numberOfSS << endl;
+    cout << requestMessage.IPList << endl;
+    cout << requestMessage.URL << endl;
 
-    cout << "next SS is <" + IP + "," + PORT + ">" <<  endl;
-    cout << "waiting for file..." << endl;
-
-    // IMPLEMENT CLIENT HERE
-    string toSend;
-    toSend = fileInVec.at(0) + "!" + fileInVec.at(1) + "!";
-    
-    for(unsigned int i=2; i < fileInVec.size(); i++) toSend += fileInVec.at(i);
-
-    cout << "SEND: " << toSend;
-
-    struct REQUEST requestMessage;
-    requestMessage.URLandIP = toSend;
     client(IP.c_str(),PORT.c_str(),requestMessage);
+
 }
