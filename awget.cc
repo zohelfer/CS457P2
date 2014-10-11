@@ -13,6 +13,7 @@
 #include <cstring>
 #include <time.h>
 #include <unistd.h>
+#include "awget.h"
 
 using namespace std;
 
@@ -23,22 +24,6 @@ struct request{
     string IPList;
     string URL;
 };
-
-string getFileName (string URL)
-{
-    string filename = "";
-    if(URL.find("/") > (strlen(URL.c_str()) +1))
-    {
-        return "index.html";
-    }
-    filename = strrchr(URL.c_str(), '/') + 1;
-    if (filename.compare("") == 0)
-    {
-        filename = "index.html";
-    }
-    cout << filename << endl;
-    return filename;
-}
 
 void receiveFile(int sockID)
 {
@@ -68,7 +53,7 @@ void receiveFile(int sockID)
         printf("%s\n","Error!: Received size < 0.");
         exit(1);
     }
-    printf("Ok received from client!\n");
+    //printf("Ok received from client!\n");
     fclose(recvFile);
 }
 
@@ -105,6 +90,7 @@ void sendFileRequest(int sockID, request requestMessage)
 
 request readChainFile (const char* filename, string URL)
 {
+    cout << "chainlist is" << endl;
     struct request requestMessage;
 
     string line;
@@ -125,6 +111,7 @@ request readChainFile (const char* filename, string URL)
                 else
                 {
                     output += line;
+                    cout << "<" << line << ">" << endl;
                     output += ",";
                 }
             }
@@ -173,17 +160,17 @@ void client(const char* ip, const char* portNum, request requestMessage)
     if ((sockID = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) >= 0)
     {
 
-        printf("%s","Connecting to server... ");
+        //printf("%s","Connecting to server... ");
         dest_addr.sin_family = AF_INET;
         dest_addr.sin_port = htons(atoi(portNum));
         dest_addr.sin_addr.s_addr =  inet_addr(ip);
 
         if(connect(sockID, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr)) >= 0)
         {
-            printf("%s\n","Connected!" );
-
+            //printf("%s\n","Connected!" );
             sendFileRequest(sockID,requestMessage);
-
+            cout << "Received file " << FILENAME << endl;
+            cout << "Goodbye!" << endl;
             receiveFile(sockID);
         }
         else
@@ -222,6 +209,7 @@ int main (int argc, char* argv[]){
 
 
     FILENAME = getFileName(URL);
+    cout << "Request: " << URL << endl;
 
     struct request requestMessage;
     string output = "";
@@ -234,10 +222,9 @@ int main (int argc, char* argv[]){
     IP = output.substr(0,output.find(" "));
     PORT = output.substr(output.find(" ")+1,strlen(output.c_str())-(output.find(" ")+1));
 
-    cout << requestMessage.numberOfSS << endl;
-    cout << requestMessage.IPList << endl;
-    cout << requestMessage.URL << endl;
-
+    cout << "next SS is <" << IP << ", " << PORT << ">" << endl;
+    cout << "waiting for file ..." << endl;
     client(IP.c_str(),PORT.c_str(),requestMessage);
-
+    
+    return 0;
 }

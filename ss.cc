@@ -17,108 +17,15 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <time.h>
-
-using namespace std;
-//the thread function
-void *connection_handler(void *);
-
-char* getIP()
-{
-    struct ifaddrs *ifaTemp, *ifa;
-    struct sockaddr_in *temp;
-    char *addr;
-
-    getifaddrs (&ifaTemp);
-    for (ifa = ifaTemp; ifa; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr->sa_family==AF_INET && strcmp(ifa->ifa_name, "lo") != 0) {
-            temp = (struct sockaddr_in *) ifa->ifa_addr;
-            addr = inet_ntoa(temp->sin_addr);
-            break;
-        }
-    }
-
-    freeifaddrs(ifaTemp);
-
-    return addr;
-}
-
-int main(int argc , char *argv[])
-{
-    int socket_desc , client_sock , c;
-    struct sockaddr_in server , client;
-
-    //Create socket
-    socket_desc = socket(AF_INET , SOCK_STREAM , 0);
-    if (socket_desc == -1)
-    {
-        printf("Could not create socket");
-    }
-    puts("Socket created");
-
-    //Prepare the sockaddr_in structure
-    server.sin_family = AF_INET;
-    char* ip = getIP();
-    server.sin_addr.s_addr = inet_addr(ip);
-    server.sin_port = 0;
-
-    //Bind
-    if( bind(socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0)
-    {
-        //print the error message
-        perror("bind failed. Error");
-        return 1;
-    }
-    puts("bind done");
-
-    //Listen
-    listen(socket_desc , 3);
-
-    //Accept and incoming connection
-    struct sockaddr_in sin;
-    socklen_t len = sizeof(sin);
-    getsockname(socket_desc, (struct sockaddr *)&sin, &len);
-    printf("%s %s %s %d\n","Waiting for connection on",ip,"port", ntohs(sin.sin_port) );
-    c = sizeof(struct sockaddr_in);
+#include "awget.h"
 
 
-    //Accept and incoming connection
-    c = sizeof(struct sockaddr_in);
-    pthread_t thread_id;
 
-
-    while( (client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c)) )
-    {
-        puts("Connection accepted");
-
-        if( pthread_create( &thread_id , NULL ,  connection_handler , (void*) &client_sock) < 0)
-        {
-            perror("could not create thread");
-            return 1;
-        }
-
-        //Now join the thread , so that we dont terminate before the thread
-        //pthread_join( thread_id , NULL);
-        puts("Handler assigned");
-    }
-
-    if (client_sock < 0)
-    {
-        perror("accept failed");
-        return 1;
-    }
-
-    return 0;
-}
-
-string handShake (int friendID)
-{
-    struct sendSize
-    {
+string handShake (int friendID){
+    struct sendSize{
         int mesSize;
     };
     string output;
-    // while(true)
-    // {
     int recvMesSize = 0;
 
     struct sendSize recvMessageSize;
@@ -135,15 +42,12 @@ string handShake (int friendID)
             temp_buff[recvMessageSize.mesSize] = '\0';
             string tempSTR(temp_buff);
             output = tempSTR;
-            //   break;
         }
     }
-// }
     return output;
 }
 
-string parseAndRemove (int numberOfSS, string IPList, string& out)
-{
+string parseAndRemove (int numberOfSS, string IPList, string& out){
     string output = "";
     srand(time(NULL));
     int choice = rand() % numberOfSS;
@@ -159,51 +63,26 @@ string parseAndRemove (int numberOfSS, string IPList, string& out)
     IPList.replace(start_pos,end_pos-start_pos+1,"");
 
     return IPList;
-
 }
 
-string getFileName (string URL)
-{
-    string filename = "";
-    if(URL.find("/") > (strlen(URL.c_str()) +1))
-    {
-        return "index.html";
-    }
-    filename = strrchr(URL.c_str(), '/') + 1;
-    if (filename.compare("") == 0)
-    {
-        filename = "index.html";
-    }
-    cout << filename << endl;
-    return filename;
-}
-
-void sendFile (int friendID, string website)
-{
-    string systemCall ="";
-    systemCall += "wget ";
-    systemCall += website;
-    systemCall += " -q";
+void sendFile (int friendID, string website){
+    string systemCall = "wget " + website + " -q";
     system(systemCall.c_str());
 
     string fileName = getFileName(website);
-
 
     FILE *sendFile;
     sendFile = fopen (fileName.c_str() , "r");
     int segSize;
     char sendBuffer[1024];
 
-    while((segSize = fread(sendBuffer, sizeof(char), 1024, sendFile)) > 0)
-    {
-        if(send(friendID, sendBuffer, segSize, 0) < 0)
-        {
-            //   fprintf(stderr, "ERROR: Failed to send file %s. (errno = %d)\n", "FILE", errno);
+    while((segSize = fread(sendBuffer, sizeof(char), 1024, sendFile)) > 0){
+        if(send(friendID, sendBuffer, segSize, 0) < 0){
             break;
         }
         bzero(sendBuffer, 1024);
     }
-    printf("Ok File %s from Client was Sent!\n", "FILE");
+    //printf("Ok File %s from Client was Sent!\n", "FILE");
     fclose (sendFile);
     remove(fileName.c_str());
 }
@@ -211,8 +90,7 @@ void sendFile (int friendID, string website)
 /*
  * This will handle connection for each client
  * */
-void *connection_handler(void *socket_desc)
-{
+void *connection_handler(void *socket_desc){
     int sock = *(int*)socket_desc;
 
     string infoString = handShake(sock);
@@ -226,8 +104,18 @@ void *connection_handler(void *socket_desc)
         string newIPList = parseAndRemove(numberSS,parseStr,nextIP);
 
         string URL = infoString.substr(infoString.find(';',pos+1)+1, strlen(infoString.c_str()));
-
+        cout << "Request: " << URL << endl;
         numberSS--;
+
+        //Printing out chainlist
+        cout << "chainlist is" << endl;
+        char* myS = strdup(parseStr.c_str());
+        char* token = strtok(myS, ",");
+        while(token != NULL){
+            printf("<%s>\n", token);
+            token = strtok(NULL, ",");
+        }
+        free(myS);
 
         string messageString = "";
         char intbuffer[2];
@@ -239,29 +127,28 @@ void *connection_handler(void *socket_desc)
         messageString += ";";
         messageString += URL;
 
-        cout << messageString << endl;
+        //cout << messageString << endl;
 
         string ip = nextIP.substr(0,nextIP.find(' '));
         string portNum = nextIP.substr(nextIP.find(' ')+1,strlen(nextIP.c_str()));
+        cout << "next SS is <" << ip << ", " << portNum << ">" << endl;
+
         int sockID;
         struct sockaddr_in dest_addr;
 
-        if ((sockID = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) >= 0)
-        {
+        if ((sockID = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) >= 0){
 
-            printf("%s","Connecting to next SS... ");
+            //printf("%s","Connecting to next SS... ");
             dest_addr.sin_family = AF_INET;
             dest_addr.sin_port = htons(atoi(portNum.c_str()));
             dest_addr.sin_addr.s_addr =  inet_addr(ip.c_str());
 
             if(connect(sockID, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr)) >= 0)
             {
-                printf("%s\n","Connected!" );
-
-                struct sendSize
-                {
-                    int mesSize;
-                };
+                //printf("%s\n","Connected!" );
+                cout << "waiting for file..." << endl;
+                cout << "Relaying file ..." << endl;
+                cout << "Goodbye!" << endl;
                 struct sendSize messageSendSize;
                 messageSendSize.mesSize = strlen(messageString.c_str());
                 if (send(sockID,&messageSendSize,sizeof(messageSendSize), 0) > 0)
@@ -285,7 +172,7 @@ void *connection_handler(void *socket_desc)
                         bzero(receivedBuffer, 1024);
                     }
                 }
-
+                
             }
 
             else
@@ -297,15 +184,84 @@ void *connection_handler(void *socket_desc)
         {
             cout << "Error: Unable to create socket " << endl;
         }
+
     }
 
     else
     {
         int pos = infoString.find(';');
         string URL = infoString.substr(infoString.find(';',pos+1)+1, strlen(infoString.c_str()));
-        cout << "REQUEST " << URL << endl;
+        cout << "Request: " << URL << endl;
+        cout << "chainlist is empty" << endl;
+        cout << "issuing wget for file " << getFileName(URL) << endl;
+        cout << "File recieved" << endl;
         sendFile(sock,URL);
+        cout << "Relaying file ..." << endl;
+        cout << "Goodbye!" << endl;
     }
 
     return 0;
 } 
+
+int createSocket(int protocolFam, int type, int protocol){
+    int mySocket = socket(protocolFam, type, protocol);
+    if (mySocket < 0) printError("Could not create socket");
+    return mySocket;
+}
+
+int main(int argc , char *argv[]){
+    char* ip;
+    int socket_desc , client_sock , c, portNum;
+    struct sockaddr_in server , client, sin;
+    // ------------------------------------------------------------------------------------------------
+    portNum = 0;
+    if(argc == 2){
+        char* portString = argv[1];
+        portNum = atoi(portString);
+        checkValidPort(portNum);
+    }
+    if(argc == 3){
+        handleArgs(argc, argv, &portNum); // Get port num    
+    }
+    ip = getIP();
+    
+    // Create socket
+    socket_desc = createSocket(AF_INET, SOCK_STREAM, 0);
+    
+    //Prepare the sockaddr_in structure
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = inet_addr(ip);
+    server.sin_port = htons(portNum);
+
+    //Bind
+    if( bind(socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0) printError("Binding failed.");
+    
+    //Listen
+    listen(socket_desc , MAX_LISTEN);
+
+    //Accept an incoming connection
+    socklen_t len = sizeof(sin);
+    getsockname(socket_desc, (struct sockaddr *)&sin, &len);
+
+    //printf("%s %s %s %d\n","Waiting for connection on",ip,"port", ntohs(sin.sin_port) );
+    printf("ss <%s, %d>: \n", ip, ntohs(sin.sin_port));
+    
+    //Accept and incoming connection
+    c = sizeof(struct sockaddr_in);
+    
+    // Starting threads
+    pthread_t thread_id;
+    while( (client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c)) )
+    {
+        if( pthread_create( &thread_id , NULL ,  connection_handler , (void*) &client_sock) < 0)
+            printError("Could not create thread.");
+
+        //Now join the thread , so that we dont terminate before the thread
+        //pthread_join( thread_id , NULL);
+        //puts("Handler assigned");
+    }
+
+    if (client_sock < 0) printError("Accept failed.");
+
+    return 0;
+}
