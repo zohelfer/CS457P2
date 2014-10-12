@@ -1,9 +1,3 @@
-/*
-    C socket server example, handles multiple clients using threads
-    Compile
-    gcc server.c -lpthread -o server
-*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <fstream>
@@ -19,7 +13,7 @@
 #include <time.h>
 #include "awget.h"
 
-
+using namespace std;
 
 string handShake (int friendID){
     struct sendSize{
@@ -139,7 +133,7 @@ void *connection_handler(void *socket_desc){
         string portNum = nextIP.substr(nextIP.find(' ')+1,strlen(nextIP.c_str()));
         cout << "next SS is <" << ip << ", " << portNum << ">" << endl;
 
-        int sockID;
+        int sockID =0;
         struct sockaddr_in dest_addr;
 
         if ((sockID = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) >= 0){
@@ -172,12 +166,16 @@ void *connection_handler(void *socket_desc){
                 cout << "Relaying file ..." << endl;
                 while((recvSize = recv(sockID, receivedBuffer, 1024,0)) > 0)
                 {
+
+                    //cout << "RECV P" << i << ": " << recvSize << endl;
                     if (send(sock, receivedBuffer,1024,0) > 0)
                     {
+                       //cout << "Passed P" << i << endl;
                         bzero(receivedBuffer, 1024);
                     }
                 }
                 cout << "Goodbye!" << endl;
+                shutdown(sock,2);
             }
 
             else
@@ -199,6 +197,7 @@ void *connection_handler(void *socket_desc){
         cout << "Request: " << URL << endl;
         cout << "chainlist is empty" << endl;
         sendFile(sock,URL);
+        shutdown(sock,2);
     }
 
     return 0;
@@ -257,9 +256,8 @@ int main(int argc , char *argv[]){
         if( pthread_create( &thread_id , NULL ,  connection_handler , (void*) &client_sock) < 0)
             printError("Could not create thread.");
 
-        //Now join the thread , so that we dont terminate before the thread
         //pthread_join( thread_id , NULL);
-        //puts("Handler assigned");
+
     }
 
     if (client_sock < 0) printError("Accept failed.");

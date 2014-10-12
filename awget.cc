@@ -45,6 +45,7 @@ void receiveFile(int sockID)
         bzero(receivedBuffer, 1024);
         if (recvSize <= 0 || recvSize > 1024)
         {
+            cout << "EOF! Break!" << endl;
             break;
         }
 
