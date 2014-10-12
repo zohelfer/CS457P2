@@ -66,25 +66,31 @@ string parseAndRemove (int numberOfSS, string IPList, string& out){
 }
 
 void sendFile (int friendID, string website){
-    string systemCall = "wget " + website + " -q";
-    system(systemCall.c_str());
-
     string fileName = getFileName(website);
 
+    cout << "issuing wget for file " << fileName << endl;
+    string systemCall = "wget " + website + " -q";
+    system(systemCall.c_str());
+    
+    cout << "File recieved" << endl;
+    
     FILE *sendFile;
     sendFile = fopen (fileName.c_str() , "r");
     int segSize;
     char sendBuffer[1024];
-
+    cout << "Relaying file ..." << endl;
     while((segSize = fread(sendBuffer, sizeof(char), 1024, sendFile)) > 0){
-        if(send(friendID, sendBuffer, segSize, 0) < 0){
+        if(send(friendID, sendBuffer, segSize, 0) <= 0){
             break;
         }
         bzero(sendBuffer, 1024);
     }
+
     //printf("Ok File %s from Client was Sent!\n", "FILE");
+    cout << "Goodbye!" << endl;
     fclose (sendFile);
     remove(fileName.c_str());
+    
 }
 
 /*
@@ -147,8 +153,6 @@ void *connection_handler(void *socket_desc){
             {
                 //printf("%s\n","Connected!" );
                 cout << "waiting for file..." << endl;
-                cout << "Relaying file ..." << endl;
-                cout << "Goodbye!" << endl;
                 struct sendSize messageSendSize;
                 messageSendSize.mesSize = strlen(messageString.c_str());
                 if (send(sockID,&messageSendSize,sizeof(messageSendSize), 0) > 0)
@@ -165,6 +169,7 @@ void *connection_handler(void *socket_desc){
 
                 char receivedBuffer [1024];
                 int recvSize;
+                cout << "Relaying file ..." << endl;
                 while((recvSize = recv(sockID, receivedBuffer, 1024,0)) > 0)
                 {
                     if (send(sock, receivedBuffer,1024,0) > 0)
@@ -172,7 +177,7 @@ void *connection_handler(void *socket_desc){
                         bzero(receivedBuffer, 1024);
                     }
                 }
-                
+                cout << "Goodbye!" << endl;
             }
 
             else
@@ -193,11 +198,7 @@ void *connection_handler(void *socket_desc){
         string URL = infoString.substr(infoString.find(';',pos+1)+1, strlen(infoString.c_str()));
         cout << "Request: " << URL << endl;
         cout << "chainlist is empty" << endl;
-        cout << "issuing wget for file " << getFileName(URL) << endl;
-        cout << "File recieved" << endl;
         sendFile(sock,URL);
-        cout << "Relaying file ..." << endl;
-        cout << "Goodbye!" << endl;
     }
 
     return 0;

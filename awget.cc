@@ -27,6 +27,7 @@ struct request{
 
 void receiveFile(int sockID)
 {
+    remove(FILENAME.c_str());
     FILE *recvFile = fopen(FILENAME.c_str(), "a");
     char receivedBuffer [1024];
     if (recvFile == NULL)
@@ -42,10 +43,11 @@ void receiveFile(int sockID)
             printf("%s\n","Error!: File write failed on server.");
         }
         bzero(receivedBuffer, 1024);
-        if (recvSize == 0 || recvSize != 1024)
+        if (recvSize <= 0 || recvSize > 1024)
         {
             break;
         }
+
     }
     if(recvSize < 0)
     {
@@ -53,7 +55,8 @@ void receiveFile(int sockID)
         printf("%s\n","Error!: Received size < 0.");
         exit(1);
     }
-    //printf("Ok received from client!\n");
+    cout << "Received file " << FILENAME << endl;
+    cout << "Goodbye!" << endl;
     fclose(recvFile);
 }
 
@@ -169,8 +172,6 @@ void client(const char* ip, const char* portNum, request requestMessage)
         {
             //printf("%s\n","Connected!" );
             sendFileRequest(sockID,requestMessage);
-            cout << "Received file " << FILENAME << endl;
-            cout << "Goodbye!" << endl;
             receiveFile(sockID);
         }
         else
